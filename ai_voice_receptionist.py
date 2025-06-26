@@ -2,12 +2,12 @@ from flask import Flask, request
 from twilio.twiml.voice_response import VoiceResponse, Gather
 import openai
 import os
-from dotenv import load_dotenv
+import logging
 
-load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 conversation_history = [
@@ -19,32 +19,40 @@ def voice():
     resp = VoiceResponse()
 
     speech = request.values.get("SpeechResult", "").strip()
-    print("Caller said:", speech)
+    logger.info(f"Caller said: {speech}")
 
-    if speech:
-        conversation_history.append({"role": "user", "content": speech})
-        ai_response = openai.ChatCompletion.create(
-            model="gpt-4-turbo",
-            messages=conversation_history
+    try:
+        if speech:
+            conversation_history.append({"role": "user", "content": speech})
+
+            ai_response = openai.ChatCompletion.create(
+                model="gpt-4-turbo",
+                messages=conversation_history
+            )
+            reply = ai_response.choices[0].message["content"]
+            conversation_history.append({"role": "assistant", "content": reply})
+            logger.info(f"AI response: {reply}")
+        else:
+            reply = "Hi! Thanks for calling. How can I help you today?"
+            logger.info("No speech received. Playing initial greeting.")
+
+        gather = Gather(
+            input="speech",
+            action="/voice",
+            method="POST",
+            timeout=6,
+            speechTimeout="auto"
         )
-        reply = ai_response.choices[0].message["content"]
-        conversation_history.append({"role": "assistant", "content": reply})
-    else:
-        reply = "Hi! Thanks for calling. How can I help you today?"
+        gather.say(reply)
+        resp.append(gather)
+        resp.redirect("/voice")
 
-    gather = Gather(
-        input="speech",
-        action="/voice",
-        method="POST",
-        timeout=6,
-        speechTimeout="auto"
-    )
-    gather.say(reply)
-    resp.append(gather)
+        return str(resp)
 
-    resp.redirect("/voice")
-
-    return str(resp)
+    except Exception as e:
+        logger.error(f"Error during voice handling: {e}")
+        resp.say("Sorry, something went wrong. Please try again later.")
+        return str(resp)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
