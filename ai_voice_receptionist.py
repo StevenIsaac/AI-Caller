@@ -12,26 +12,33 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route("/voice", methods=["POST"])
 def voice():
-    transcript = request.values.get("SpeechResult", None)
+    try:
+        transcript = request.values.get("SpeechResult", None)
+        print(f"Transcript received: {transcript}")
 
-    if transcript:
-        completion = openai.ChatCompletion.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": "You're a helpful, polite receptionist for a law firm."},
-                {"role": "user", "content": transcript}
-            ]
-        )
-        ai_response = completion.choices[0].message["content"]
-    else:
-        ai_response = "Hi! Thanks for calling. How can I help you today?"
+        if transcript:
+            response = openai.ChatCompletion.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI receptionist."},
+                    {"role": "user", "content": transcript}
+                ]
+            )
+            ai_reply = response.choices[0].message["content"]
+        else:
+            ai_reply = "Hi! Thanks for calling. How can I help you today?"
 
-    # Build Twilio voice response
-    resp = VoiceResponse()
-    gather = Gather(input="speech", action="/voice", method="POST", timeout=5)
-    gather.say(ai_response)
-    resp.append(gather)
-    return str(resp)
+        print(f"AI reply: {ai_reply}")
+
+        twiml = VoiceResponse()
+        gather = Gather(input="speech", timeout=3, action="/voice", method="POST")
+        gather.say(ai_reply)
+        twiml.append(gather)
+        return str(twiml)
+
+    except Exception as e:
+        print("ERROR:", e)
+        return str(VoiceResponse().say("Sorry, something went wrong. Please try again later."))
 
 if __name__ == "__main__":
     import os
