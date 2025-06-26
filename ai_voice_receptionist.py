@@ -1,6 +1,6 @@
 from flask import Flask, request
 from twilio.twiml.voice_response import VoiceResponse, Gather
-import openai
+from openai import OpenAI
 import os
 import logging
 
@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 conversation_history = [
     {"role": "system", "content": "You're a helpful, polite receptionist for a law firm."}
@@ -25,11 +25,13 @@ def voice():
         if speech:
             conversation_history.append({"role": "user", "content": speech})
 
-            ai_response = openai.ChatCompletion.create(
+            chat_completion = client.chat.completions.create(
                 model="gpt-4-turbo",
                 messages=conversation_history
             )
-            reply = ai_response.choices[0].message["content"]
+
+            reply = chat_completion.choices[0].message.content
+
             conversation_history.append({"role": "assistant", "content": reply})
             logger.info(f"AI response: {reply}")
         else:
