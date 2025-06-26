@@ -13,6 +13,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 @app.route("/voice", methods=["POST"])
 def voice():
     try:
+        print("Entered voice feature")
         transcript = request.values.get("SpeechResult", None)
         print(f"Transcript received: {transcript}")
 
