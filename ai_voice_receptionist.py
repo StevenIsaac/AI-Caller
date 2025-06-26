@@ -10,38 +10,42 @@ app = Flask(__name__)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+conversation_history = [
+    {"role": "system", "content": "You're a helpful, polite receptionist for a law firm."}
+]
+
 @app.route("/voice", methods=["POST"])
 def voice():
-    try:
-        print("Entered voice feature")
-        transcript = request.values.get("SpeechResult", None)
-        print(f"Transcript received: {transcript}")
+    resp = VoiceResponse()
 
-        if transcript:
-            response = openai.ChatCompletion.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful AI receptionist."},
-                    {"role": "user", "content": transcript}
-                ]
-            )
-            ai_reply = response.choices[0].message["content"]
-        else:
-            ai_reply = "Hi! Thanks for calling. How can I help you today?"
+    speech = request.values.get("SpeechResult", "").strip()
+    print("Caller said:", speech)
 
-        print(f"AI reply: {ai_reply}")
+    if speech:
+        conversation_history.append({"role": "user", "content": speech})
+        ai_response = openai.ChatCompletion.create(
+            model="gpt-4-turbo",
+            messages=conversation_history
+        )
+        reply = ai_response.choices[0].message["content"]
+        conversation_history.append({"role": "assistant", "content": reply})
+    else:
+        reply = "Hi! Thanks for calling. How can I help you today?"
 
-        twiml = VoiceResponse()
-        gather = Gather(input="speech", timeout=3, action="/voice", method="POST")
-        gather.say(ai_reply)
-        twiml.append(gather)
-        return str(twiml)
+    gather = Gather(
+        input="speech",
+        action="/voice",
+        method="POST",
+        timeout=6,
+        speechTimeout="auto"
+    )
+    gather.say(reply)
+    resp.append(gather)
 
-    except Exception as e:
-        print("ERROR:", e)
-        return str(VoiceResponse().say("Sorry, something went wrong. Please try again later."))
+    resp.redirect("/voice")
+
+    return str(resp)
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
